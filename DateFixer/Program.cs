@@ -116,8 +116,14 @@ namespace DateFixer
                 {
                     try
                     {
+                        var attributes = File.GetAttributes(path);
+                        File.SetAttributes(path, FileAttributes.Normal);
+
                         File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
                         File.SetCreationTimeUtc(path, (DateTime)creationTime);
+
+                        File.SetAttributes(path, attributes);
+
                         Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
                     } catch (Exception) { }
                 }
