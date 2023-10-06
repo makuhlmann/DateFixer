@@ -68,9 +68,10 @@ namespace DateFixer
         static void ProcessFile(string path)
         {
             string extension = Path.GetExtension(path).ToLower();
+            DateTime? creationTime = null;
+
             if (discImageFormats.Contains(extension))
             {
-                DateTime? creationTime = null;
                 var fs = File.OpenRead(path);
 
                 // ISO 9660
@@ -80,11 +81,7 @@ namespace DateFixer
                     creationTime = reader.Root.CreationTimeUtc;
                     reader.Dispose();
                 }
-                catch (Exception ex)
-                {
-                    //if (System.Diagnostics.Debugger.IsAttached)
-                        //throw;
-                }
+                catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
 
                 // UDF
                 try
@@ -93,57 +90,41 @@ namespace DateFixer
                     creationTime = reader.Root.CreationTimeUtc;
                     reader.Dispose();
                 }
-                catch (Exception ex)
-                {
-                    //if (System.Diagnostics.Debugger.IsAttached)
-                    //throw;
-                }
+                catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
 
                 fs.Close();
-
-                if (creationTime != null && creationTime != DateTime.MinValue)
-                {
-                    File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
-                    File.SetCreationTimeUtc(path, (DateTime)creationTime);
-                    Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
-                    return;
-                }
             }
+
             if (signedFilesFormat.Contains(extension))
             {
-                var creationTime = SignatureManager.GetSignatureDate(path);
-                if (creationTime != null)
+                creationTime = SignatureManager.GetSignatureDate(path);
+            }
+
+            if (creationTime != null && creationTime != DateTime.MinValue)
+            {
+                try
                 {
-                    try
-                    {
-                        var attributes = File.GetAttributes(path);
-                        File.SetAttributes(path, FileAttributes.Normal);
+                    var attributes = File.GetAttributes(path);
+                    File.SetAttributes(path, FileAttributes.Normal);
 
-                        File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
-                        File.SetCreationTimeUtc(path, (DateTime)creationTime);
+                    File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
+                    File.SetCreationTimeUtc(path, (DateTime)creationTime);
 
-                        File.SetAttributes(path, attributes);
+                    File.SetAttributes(path, attributes);
 
-                        Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
-                    } catch (Exception) { }
+                    Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
                 }
-                else
-                {
-                    //if (System.Diagnostics.Debugger.IsAttached)
-                    //throw;
-                }
+                catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
             }
         }
 
         static void ProcessDirectory(string path)
         {
-            var files = Directory.GetFiles(path);
-            foreach (var file in files)
+            foreach (var file in Directory.GetFiles(path))
             {
                 ProcessFile(file);
             }
-            var folders = Directory.GetDirectories(path);
-            foreach(var folder in folders)
+            foreach(var folder in Directory.GetDirectories(path))
             {
                 ProcessDirectory(folder);
             }
