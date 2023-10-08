@@ -40,23 +40,62 @@ namespace DateFixer
             ".xap"
         };
 
+        static DateTime minDate = new DateTime(1985, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        static bool scanIso = false;
+        static bool scanSigned = false;
+        static bool processedAtLeastOne = false;
+
         static void Main(string[] args)
         {
             foreach (var path in args)
             {
-                if (File.Exists(path))
+                if (path.StartsWith("/"))
                 {
-                    ProcessFile(path);
-                }
-                else if (Directory.Exists(path))
-                {
-                    ProcessDirectory(path);
+                    if (path.StartsWith("/i"))
+                    {
+                        scanIso = true;
+                    }
+                    else if (path.StartsWith("/s"))
+                    {
+                        scanSigned = true;
+                    }
+                    else if (path.StartsWith("/?"))
+                    {
+                        Console.WriteLine($"DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n" +
+                            $"/i - Process ISO files only\n" +
+                            $"/s - Process signed files only\n" +
+                            $"/? - Shows list of commands\n" +
+                            $"Default: Processes both ISO and signed");
+                        return;
+                    }
                 }
                 else
                 {
-                    Console.WriteLine("Invalid path: " + path);
+                    if (!scanIso && !scanSigned)
+                        scanIso = scanSigned = true;
+
+                    processedAtLeastOne = true;
+
+                    if (File.Exists(path))
+                    {
+                        ProcessFile(path);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        ProcessDirectory(path);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid path: " + path);
+                    }
                 }
+
             }
+
+            if (!processedAtLeastOne)
+                Console.WriteLine($"No valid path given as a parameter\n" +
+                    $"See /? for more information");
 
             if (System.Diagnostics.Debugger.IsAttached)
             {
@@ -70,7 +109,7 @@ namespace DateFixer
             string extension = Path.GetExtension(path).ToLower();
             DateTime? creationTime = null;
 
-            if (discImageFormats.Contains(extension))
+            if (scanIso && discImageFormats.Contains(extension))
             {
                 var fs = File.OpenRead(path);
 
@@ -79,23 +118,34 @@ namespace DateFixer
                 {
                     var reader = new CDReader(fs, true);
                     creationTime = reader.Root.CreationTimeUtc;
+
+                    if (creationTime == null || creationTime < minDate)
+                        creationTime = DeepScanIso(reader);
+
                     reader.Dispose();
                 }
                 catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
 
                 // UDF
-                try
+                if (creationTime == null || creationTime < minDate)
                 {
-                    var reader = new UdfReader(fs);
-                    creationTime = reader.Root.CreationTimeUtc;
-                    reader.Dispose();
+                    try
+                    {
+                        var reader = new UdfReader(fs);
+                        creationTime = reader.Root.CreationTimeUtc;
+
+                        if (creationTime == null || creationTime < minDate)
+                            creationTime = DeepScanIso(reader);
+
+                        reader.Dispose();
+                    }
+                    catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
                 }
-                catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
 
                 fs.Close();
             }
 
-            if (signedFilesFormat.Contains(extension))
+            if (scanSigned && signedFilesFormat.Contains(extension))
             {
                 creationTime = SignatureManager.GetSignatureDate(path);
             }
@@ -128,6 +178,29 @@ namespace DateFixer
             {
                 ProcessDirectory(folder);
             }
+        }
+
+        static DateTime? DeepScanIso(CDReader reader)
+        {
+            DateTime result = DateTime.MinValue;
+            foreach (var item in reader.GetFileSystemEntries(""))
+            {
+                DateTime itemDate = reader.GetFileInfo(item).CreationTimeUtc;
+                if (itemDate > result)
+                    result = itemDate;
+            }
+            return result;
+        }
+        static DateTime? DeepScanIso(UdfReader reader)
+        {
+            DateTime result = DateTime.MinValue;
+            foreach (var item in reader.GetFileSystemEntries(""))
+            {
+                DateTime itemDate = reader.GetFileInfo(item).CreationTimeUtc;
+                if (itemDate > result)
+                    result = itemDate;
+            }
+            return result;
         }
     }
 }
