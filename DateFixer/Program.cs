@@ -42,11 +42,13 @@ namespace DateFixer
         };
 
         static DateTime minDate = new DateTime(1985, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        static int filesProcessedCount = 0;
 
         static bool scanIso = false;
         static bool scanSigned = false;
         static bool processedAtLeastOne = false;
         static bool scanFileName = false;
+        static bool quiet = false;
 
         static void Main(string[] args)
         {
@@ -66,12 +68,17 @@ namespace DateFixer
                     {
                         scanFileName = true;
                     }
+                    else if (path.StartsWith("/q"))
+                    {
+                        quiet = true;
+                    }
                     else if (path.StartsWith("/?"))
                     {
                         Console.WriteLine($"DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n" +
                             $"/i - Process ISO files\n" +
                             $"/s - Process signed files\n" +
                             $"/f - Try to parse dates contained in the file name\n" +
+                            $"/q - Do not print all files that were touched\n" +
                             $"/? - Shows list of commands\n" +
                             $"Default: /i /s\n" +
                             $"The file name parser is looking for various formats in the order yyyyMMdd[HHmm[ss]]");
@@ -105,9 +112,10 @@ namespace DateFixer
                 Console.WriteLine($"No valid path given as a parameter\n" +
                     $"See /? for more information");
 
+            Console.WriteLine($"Done: {filesProcessedCount} file dates modified");
+
             if (System.Diagnostics.Debugger.IsAttached)
             {
-                Console.WriteLine("DONE");
                 Console.ReadKey();
             }
         }
@@ -175,7 +183,10 @@ namespace DateFixer
 
                     File.SetAttributes(path, attributes);
 
-                    Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
+                    filesProcessedCount++;
+
+                    if (!quiet)
+                        Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
                 }
                 catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
             }
