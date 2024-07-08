@@ -49,6 +49,7 @@ namespace DateFixer
         static bool processedAtLeastOne = false;
         static bool scanFileName = false;
         static bool quiet = false;
+        static bool ignoreFormats = false;
 
         static void Main(string[] args)
         {
@@ -72,12 +73,17 @@ namespace DateFixer
                     {
                         quiet = true;
                     }
+                    else if (path.StartsWith("/x"))
+                    {
+                        ignoreFormats = true;
+                    }
                     else if (path.StartsWith("/?"))
                     {
                         Console.WriteLine($"DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n" +
                             $"/i - Process ISO files\n" +
                             $"/s - Process signed files\n" +
                             $"/f - Try to parse dates contained in the file name\n" +
+                            $"/x - Ignore file extensions, try to process all files anyway\n" +
                             $"/q - Do not print all files that were touched\n" +
                             $"/? - Shows list of commands\n" +
                             $"Default: /i /s\n" +
@@ -125,7 +131,7 @@ namespace DateFixer
             string extension = Path.GetExtension(path).ToLower();
             DateTime? creationTime = null;
 
-            if (scanIso && discImageFormats.Contains(extension))
+            if (scanIso && (discImageFormats.Contains(extension) || ignoreFormats))
             {
                 var fs = File.OpenRead(path);
 
@@ -161,7 +167,7 @@ namespace DateFixer
                 fs.Close();
             }
 
-            if (creationTime == null && scanSigned && signedFilesFormat.Contains(extension))
+            if (creationTime == null && scanSigned && (signedFilesFormat.Contains(extension) || ignoreFormats))
             {
                 creationTime = SignatureManager.GetSignatureDate(path);
             }
