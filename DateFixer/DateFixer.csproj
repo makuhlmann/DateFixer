@@ -94,6 +94,7 @@
     <None Include="App.config" />
     <None Include="ILMerge.props" />
     <None Include="packages.config" />
+    <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.8">
