@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace DateFixer
@@ -45,6 +46,7 @@ namespace DateFixer
         static bool scanIso = false;
         static bool scanSigned = false;
         static bool processedAtLeastOne = false;
+        static bool scanFileName = false;
 
         static void Main(string[] args)
         {
@@ -60,19 +62,25 @@ namespace DateFixer
                     {
                         scanSigned = true;
                     }
+                    else if (path.StartsWith("/f"))
+                    {
+                        scanFileName = true;
+                    }
                     else if (path.StartsWith("/?"))
                     {
                         Console.WriteLine($"DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n" +
-                            $"/i - Process ISO files only\n" +
-                            $"/s - Process signed files only\n" +
+                            $"/i - Process ISO files\n" +
+                            $"/s - Process signed files\n" +
+                            $"/f - Try to parse dates contained in the file name\n" +
                             $"/? - Shows list of commands\n" +
-                            $"Default: Processes both ISO and signed");
+                            $"Default: /i /s\n" +
+                            $"The file name parser is looking for various formats in the order yyyyMMdd[HHmm[ss]]");
                         return;
                     }
                 }
                 else
                 {
-                    if (!scanIso && !scanSigned)
+                    if (!scanIso && !scanSigned && !scanFileName)
                         scanIso = scanSigned = true;
 
                     processedAtLeastOne = true;
@@ -145,9 +153,14 @@ namespace DateFixer
                 fs.Close();
             }
 
-            if (scanSigned && signedFilesFormat.Contains(extension))
+            if (creationTime == null && scanSigned && signedFilesFormat.Contains(extension))
             {
                 creationTime = SignatureManager.GetSignatureDate(path);
+            }
+
+            if (creationTime == null && scanFileName)
+            {
+                creationTime = ParseFileNameDate(Path.GetFileNameWithoutExtension(path));
             }
 
             if (creationTime != null && creationTime != DateTime.MinValue)
@@ -166,6 +179,25 @@ namespace DateFixer
                 }
                 catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
             }
+        }
+
+        static DateTime? ParseFileNameDate (string fileNameWoEx)
+        {
+            Match m = Regex.Match(fileNameWoEx, @"(\d\d\d\d)\D?(\d\d)\D?(\d\d)\D?(\d\d)?\D?(\d\d)?\D?(\d\d)?");
+            if (m.Success && (m.Groups[0].Value.StartsWith("19") || m.Groups[0].Value.StartsWith("20") || m.Groups[0].Value.StartsWith("21")))
+            {
+                if (!string.IsNullOrEmpty(m.Groups[6].Value))
+                    return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
+                                        int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), int.Parse(m.Groups[6].Value));
+
+                if (!string.IsNullOrEmpty(m.Groups[5].Value))
+                    return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
+                                        int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), 0);
+
+                if (!string.IsNullOrEmpty(m.Groups[3].Value))
+                    return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value));
+            }
+            return null;
         }
 
         static void ProcessDirectory(string path)
