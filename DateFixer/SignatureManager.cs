@@ -3,12 +3,9 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-namespace DateFixer
-{
-    public static class SignatureManager
-    {
-        public static DateTime? GetSignatureDate(string fileName)
-        {
+namespace DateFixer {
+    public static class SignatureManager {
+        public static DateTime? GetSignatureDate(string fileName) {
             DateTime? lowestDate = null;
 
             IntPtr hWind = IntPtr.Zero;
@@ -18,10 +15,8 @@ namespace DateFixer
 
             IntPtr pcwszFilePath = Marshal.StringToHGlobalAuto(fileName);
 
-            try
-            {
-                WINTRUST_FILE_INFO File = new WINTRUST_FILE_INFO()
-                {
+            try {
+                WINTRUST_FILE_INFO File = new WINTRUST_FILE_INFO() {
                     cbStruct = Marshal.SizeOf(typeof(WINTRUST_FILE_INFO)),
                     pcwszFilePath = pcwszFilePath,
                     hFile = IntPtr.Zero,
@@ -30,12 +25,10 @@ namespace DateFixer
 
                 IntPtr ptrFile = Marshal.AllocHGlobal(File.cbStruct);
 
-                try
-                {
+                try {
                     Marshal.StructureToPtr(File, ptrFile, false);
 
-                    WINTRUST_DATA WVTData = new WINTRUST_DATA()
-                    {
+                    WINTRUST_DATA WVTData = new WINTRUST_DATA() {
                         cbStruct = Marshal.SizeOf(typeof(WINTRUST_DATA)),
                         pPolicyCallbackData = IntPtr.Zero,
                         pSIPClientData = IntPtr.Zero,
@@ -57,11 +50,9 @@ namespace DateFixer
                     bool canUseSignatureSettings = Environment.OSVersion.Version > new Version(6, 2, 0, 0);
                     IntPtr pSignatureSettings = IntPtr.Zero;
 
-                    if (canUseSignatureSettings)
-                    {
+                    if (canUseSignatureSettings) {
                         // Setup WINTRUST_SIGNATURE_SETTINGS to get the number of signatures in the file
-                        signatureSettings = new WINTRUST_SIGNATURE_SETTINGS()
-                        {
+                        signatureSettings = new WINTRUST_SIGNATURE_SETTINGS() {
                             cbStruct = Marshal.SizeOf(typeof(WINTRUST_SIGNATURE_SETTINGS)),
                             dwIndex = 0,
                             dwFlags = WSS_GET_SECONDARY_SIG_COUNT,
@@ -73,42 +64,34 @@ namespace DateFixer
                         pSignatureSettings = Marshal.AllocHGlobal(signatureSettings.cbStruct);
                     }
 
-                    try
-                    {
-                        if (pSignatureSettings != IntPtr.Zero)
-                        {
+                    try {
+                        if (pSignatureSettings != IntPtr.Zero) {
                             Marshal.StructureToPtr(signatureSettings, pSignatureSettings, false);
                             WVTData.pSignatureSettings = pSignatureSettings;
                         }
 
                         IntPtr pgActionID = Marshal.AllocHGlobal(actionIdBytes.Length);
 
-                        try
-                        {
+                        try {
                             Marshal.Copy(actionIdBytes, 0, pgActionID, actionIdBytes.Length);
 
                             IntPtr pWVTData = Marshal.AllocHGlobal(WVTData.cbStruct);
 
-                            try
-                            {
+                            try {
                                 Marshal.StructureToPtr(WVTData, pWVTData, false);
 
                                 int hRESULT = WinVerifyTrust(hWind, pgActionID, pWVTData);
 
-                                if (hRESULT == 0)
-                                {
-                                    if (pSignatureSettings != IntPtr.Zero)
-                                    {
+                                if (hRESULT == 0) {
+                                    if (pSignatureSettings != IntPtr.Zero) {
                                         // Read back the signature settings
                                         signatureSettings = (WINTRUST_SIGNATURE_SETTINGS)Marshal.PtrToStructure(pSignatureSettings, typeof(WINTRUST_SIGNATURE_SETTINGS));
                                     }
 
                                     int signatureCount = signatureSettings.cSecondarySigs + 1;
 
-                                    for (int dwIndex = 0; dwIndex < signatureCount; dwIndex++)
-                                    {
-                                        if (pSignatureSettings != IntPtr.Zero)
-                                        {
+                                    for (int dwIndex = 0; dwIndex < signatureCount; dwIndex++) {
+                                        if (pSignatureSettings != IntPtr.Zero) {
                                             signatureSettings.dwIndex = dwIndex;
                                             signatureSettings.dwFlags = WSS_VERIFY_SPECIFIC;
 
@@ -122,18 +105,15 @@ namespace DateFixer
 
                                         hRESULT = WinVerifyTrust(hWind, pgActionID, pWVTData);
 
-                                        try
-                                        {
-                                            if (hRESULT == 0)
-                                            {
+                                        try {
+                                            if (hRESULT == 0) {
                                                 WVTData = (WINTRUST_DATA)Marshal.PtrToStructure(pWVTData, typeof(WINTRUST_DATA));
 
                                                 IntPtr ptrProvData = WTHelperProvDataFromStateData(WVTData.hWVTStateData);
 
                                                 CRYPT_PROVIDER_DATA provData = (CRYPT_PROVIDER_DATA)Marshal.PtrToStructure(ptrProvData, typeof(CRYPT_PROVIDER_DATA));
 
-                                                for (int idxSigner = 0; idxSigner < provData.csSigners; idxSigner++)
-                                                {
+                                                for (int idxSigner = 0; idxSigner < provData.csSigners; idxSigner++) {
                                                     IntPtr ptrProvSigner = WTHelperGetProvSignerFromChain(ptrProvData, idxSigner, false, 0);
 
                                                     CRYPT_PROVIDER_SGNR ProvSigner = (CRYPT_PROVIDER_SGNR)Marshal.PtrToStructure(ptrProvSigner, typeof(CRYPT_PROVIDER_SGNR));
@@ -144,19 +124,15 @@ namespace DateFixer
                                                     CRYPT_PROVIDER_CERT cert = (CRYPT_PROVIDER_CERT)Marshal.PtrToStructure(ptrCert, typeof(CRYPT_PROVIDER_CERT));
 
                                                     if (ProvSigner.sftVerifyAsOf.dwHighDateTime != provData.sftSystemTime.dwHighDateTime &&
-                                                        ProvSigner.sftVerifyAsOf.dwLowDateTime != provData.sftSystemTime.dwLowDateTime)
-                                                    {
+                                                        ProvSigner.sftVerifyAsOf.dwLowDateTime != provData.sftSystemTime.dwLowDateTime) {
                                                         var timestamp = DateTime.FromFileTimeUtc(((long)ProvSigner.sftVerifyAsOf.dwHighDateTime << 32) | (uint)ProvSigner.sftVerifyAsOf.dwLowDateTime);
-                                                        if (lowestDate == null || timestamp < lowestDate)
-                                                        {
+                                                        if (lowestDate == null || timestamp < lowestDate) {
                                                             lowestDate = timestamp;
                                                         }
                                                     }
                                                 }
                                             }
-                                        }
-                                        finally
-                                        {
+                                        } finally {
                                             WVTData.dwStateAction = WTD_STATEACTION_CLOSE;
                                             Marshal.StructureToPtr(WVTData, pWVTData, false);
 
@@ -164,32 +140,21 @@ namespace DateFixer
                                         }
                                     }
                                 }
-                            }
-                            finally
-                            {
+                            } finally {
                                 Marshal.FreeHGlobal(pWVTData);
                             }
-                        }
-                        finally
-                        {
+                        } finally {
                             Marshal.FreeHGlobal(pgActionID);
                         }
-                    }
-                    finally
-                    {
-                        if (pSignatureSettings != IntPtr.Zero)
-                        {
+                    } finally {
+                        if (pSignatureSettings != IntPtr.Zero) {
                             Marshal.FreeHGlobal(pSignatureSettings);
                         }
                     }
-                }
-                finally
-                {
+                } finally {
                     Marshal.FreeHGlobal(ptrFile);
                 }
-            }
-            finally
-            {
+            } finally {
                 Marshal.FreeHGlobal(pcwszFilePath);
             }
 
@@ -223,8 +188,7 @@ namespace DateFixer
         private static extern IntPtr WTHelperGetProvCertFromChain(IntPtr pSgnr, int idxCert);
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct WINTRUST_DATA
-        {
+        private struct WINTRUST_DATA {
             internal int cbStruct;
             internal IntPtr pPolicyCallbackData;
             internal IntPtr pSIPClientData;
@@ -241,8 +205,7 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct WINTRUST_SIGNATURE_SETTINGS
-        {
+        private struct WINTRUST_SIGNATURE_SETTINGS {
             internal int cbStruct;
             internal int dwIndex;
             internal int dwFlags;
@@ -252,8 +215,7 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct WINTRUST_FILE_INFO
-        {
+        private struct WINTRUST_FILE_INFO {
             internal int cbStruct;
             internal IntPtr pcwszFilePath;
             internal IntPtr hFile;
@@ -261,8 +223,7 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CRYPT_PROVIDER_DATA
-        {
+        private struct CRYPT_PROVIDER_DATA {
             internal int cbStruct;
             internal IntPtr pWintrustData;
             internal bool fOpenedFile;
@@ -297,8 +258,7 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CRYPT_PROVIDER_SGNR
-        {
+        private struct CRYPT_PROVIDER_SGNR {
             internal int cbStruct;
             internal System.Runtime.InteropServices.ComTypes.FILETIME sftVerifyAsOf;
             internal int csCertChain;
@@ -312,8 +272,7 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CRYPT_PROVIDER_CERT
-        {
+        private struct CRYPT_PROVIDER_CERT {
             internal int cbStruct;
             internal IntPtr pCert;
             internal bool fCommercial;
@@ -332,15 +291,13 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CRYPT_ALGORITHM_IDENTIFIER
-        {
+        private struct CRYPT_ALGORITHM_IDENTIFIER {
             internal IntPtr pszObjId;
             internal CRYPT_INTEGER_BLOB Parameters;
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CMSG_SIGNER_INFO
-        {
+        private struct CMSG_SIGNER_INFO {
             internal int dwVersion;
             internal CRYPT_INTEGER_BLOB Issuer;
             internal CRYPT_INTEGER_BLOB SerialNumber;
@@ -352,15 +309,13 @@ namespace DateFixer
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CRYPT_INTEGER_BLOB
-        {
+        private struct CRYPT_INTEGER_BLOB {
             internal int cbData;
             internal IntPtr pbData;
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CRYPT_ATTRIBUTES
-        {
+        private struct CRYPT_ATTRIBUTES {
             internal int cAttr;
             internal IntPtr rgAttr;
         }
