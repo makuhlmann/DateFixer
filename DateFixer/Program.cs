@@ -50,6 +50,7 @@ namespace DateFixer
         static bool scanFileName = false;
         static bool quiet = false;
         static bool ignoreFormats = false;
+        static bool recursive = false;
 
         static void Main(string[] args)
         {
@@ -77,16 +78,21 @@ namespace DateFixer
                     {
                         ignoreFormats = true;
                     }
+                    else if (path.StartsWith("/r"))
+                    {
+                        recursive = true;
+                    }
                     else if (path.StartsWith("/?"))
                     {
-                        Console.WriteLine($"DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n" +
+                        Console.WriteLine($"DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n\n" +
                             $"/i - Process ISO files\n" +
                             $"/s - Process signed files\n" +
                             $"/f - Try to parse dates contained in the file name\n" +
                             $"/x - Ignore file extensions, try to process all files anyway\n" +
+                            $"/r - Process folders recursively\n" +
                             $"/q - Do not print all files that were touched\n" +
-                            $"/? - Shows list of commands\n" +
-                            $"Default: /i /s\n" +
+                            $"/? - Shows list of commands\n\n" +
+                            $"Default options: /i /s\n" +
                             $"The file name parser is looking for various formats in the order yyyyMMdd[HHmm[ss]]");
                         return;
                     }
@@ -120,7 +126,7 @@ namespace DateFixer
 
             Console.WriteLine($"Done: {filesProcessedCount} file dates modified");
 
-            if (System.Diagnostics.Debugger.IsAttached)
+            if (true) //System.Diagnostics.Debugger.IsAttached)
             {
                 Console.ReadKey();
             }
@@ -223,9 +229,12 @@ namespace DateFixer
             {
                 ProcessFile(file);
             }
-            foreach(var folder in Directory.GetDirectories(path))
+            if (recursive)
             {
-                ProcessDirectory(folder);
+                foreach (var folder in Directory.GetDirectories(path))
+                {
+                    ProcessDirectory(folder);
+                }
             }
         }
 
