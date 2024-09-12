@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -34,6 +35,8 @@ namespace DateFixer {
             ".xap"
         };
 
+        static List<string> processedFiles = new List<string>();
+
         static readonly DateTime isoMinDate = new DateTime(1985, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         static int filesProcessedCount = 0;
 
@@ -43,7 +46,10 @@ namespace DateFixer {
         static bool scanFileName = false;
         static bool quiet = false;
         static bool ignoreFormats = false;
+        static bool dateRelated = false;
         static bool recursive = false;
+
+        static bool errorsHappened = false;
 
         static void Main(string[] args) {
             foreach (var path in args) {
@@ -64,6 +70,9 @@ namespace DateFixer {
                         case "x":
                             ignoreFormats = true;
                             break;
+                        case "l":
+                            dateRelated = true;
+                            break;
                         case "r":
                             recursive = true;
                             break;
@@ -73,6 +82,7 @@ namespace DateFixer {
                             "/s - Process signed files\n" +
                             "/f - Try to parse dates contained in the file name\n" +
                             "/x - Ignore file extensions, try to process all files anyway\n" +
+                            "/l - Give files with the same name but a different extension the same date\n" +
                             "/r - Process folders recursively\n" +
                             "/q - Do not print all files that were touched\n" +
                             "/? - Shows list of commands\n\n" +
@@ -92,7 +102,7 @@ namespace DateFixer {
                     processedAtLeastOne = true;
 
                     if (File.Exists(path)) {
-                        ProcessFile(path);
+                        ProcessFile(path, new string[] { });
                     } else if (Directory.Exists(path)) {
                         ProcessDirectory(path);
                     } else {
@@ -108,17 +118,25 @@ namespace DateFixer {
 
             Console.WriteLine($"Done: {filesProcessedCount} file dates modified");
 
-            if (System.Diagnostics.Debugger.IsAttached) {
+            if (errorsHappened || System.Diagnostics.Debugger.IsAttached) {
+                Console.WriteLine(" == Files processed with errors, press any key to exit ==");
                 Console.ReadKey();
             }
         }
 
-        static void ProcessFile(string path) {
+        static void ProcessFile(string path, string[] otherFiles) {
             string extension = Path.GetExtension(path).ToLower();
             DateTime? creationTime = null;
 
             if (scanIso && (discImageFormats.Contains(extension) || ignoreFormats)) {
-                var fs = File.OpenRead(path);
+                FileStream fs;
+
+                try {
+                    fs = File.OpenRead(path);
+                } catch (Exception ex) {
+                    Console.WriteLine($"Error opening {path} - {ex.Message}");
+                    return;
+                }
 
                 // ISO 9660
                 try {
@@ -165,8 +183,30 @@ namespace DateFixer {
 
                     filesProcessedCount++;
 
+                    processedFiles.Add(path);
+
                     if (!quiet)
                         Console.WriteLine(Path.GetFileName(path) + " -> " + ((DateTime)creationTime).ToString());
+
+                    if (dateRelated) {
+                        var files = otherFiles.Where(s => s != path && string.Equals(Path.GetFileNameWithoutExtension(s), Path.GetFileNameWithoutExtension(path), StringComparison.OrdinalIgnoreCase) && !processedFiles.Contains(s));
+                        foreach (var file in files) {
+                            attributes = File.GetAttributes(file);
+                            File.SetAttributes(file, FileAttributes.Normal);
+
+                            File.SetLastWriteTimeUtc(file, (DateTime)creationTime);
+                            File.SetCreationTimeUtc(file, (DateTime)creationTime);
+
+                            File.SetAttributes(file, attributes);
+
+                            filesProcessedCount++;
+
+                            processedFiles.Add(file);
+
+                            if (!quiet)
+                                Console.WriteLine(Path.GetFileName(file) + " +> " + ((DateTime)creationTime).ToString());
+                        }
+                    }
                 } catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
             }
         }
@@ -192,9 +232,14 @@ namespace DateFixer {
         }
 
         static void ProcessDirectory(string path) {
-            foreach (var file in Directory.GetFiles(path)) {
-                ProcessFile(file);
+            string[] files = Directory.GetFiles(path);
+            foreach (var file in files) {
+                ProcessFile(file, files);
             }
+
+            // Clear processed files when changing folder
+            processedFiles = new List<string>();
+
             if (recursive) {
                 foreach (var folder in Directory.GetDirectories(path)) {
                     ProcessDirectory(folder);
