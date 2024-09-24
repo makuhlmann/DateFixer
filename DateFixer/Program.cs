@@ -48,6 +48,7 @@ namespace DateFixer {
         static bool ignoreFormats = false;
         static bool dateRelated = false;
         static bool recursive = false;
+        static bool dateFolders = false;
 
         static bool errorsHappened = false;
 
@@ -76,6 +77,9 @@ namespace DateFixer {
                         case "r":
                             recursive = true;
                             break;
+                        case "d":
+                            recursive = true;
+                            break;
                         case "?":
                             Console.WriteLine("DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n\n" +
                             "/i - Process image files\n" +
@@ -84,6 +88,7 @@ namespace DateFixer {
                             "/x - Ignore file extensions, try to process all files anyway\n" +
                             "/l - Give files with the same name but a different extension the same date\n" +
                             "/r - Process folders recursively\n" +
+                            "/d - Give folders the same date as the newest file contained within (implies /r)\n" +
                             "/q - Do not print all files that were touched\n" +
                             "/? - Shows list of commands\n\n" +
                             "Default options: /i /s\n" +
@@ -124,7 +129,7 @@ namespace DateFixer {
             }
         }
 
-        static void ProcessFile(string path, string[] otherFiles) {
+        static DateTime? ProcessFile(string path, string[] otherFiles) {
             string extension = Path.GetExtension(path).ToLower();
             DateTime? creationTime = null;
 
@@ -135,7 +140,7 @@ namespace DateFixer {
                     fs = File.OpenRead(path);
                 } catch (Exception ex) {
                     Console.WriteLine($"Error opening {path} - {ex.Message}");
-                    return;
+                    return null;
                 }
 
                 // ISO 9660
@@ -208,7 +213,9 @@ namespace DateFixer {
                         }
                     }
                 } catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
+                return creationTime;
             }
+            return null;
         }
 
         static DateTime? ParseFileNameDate(string fileNameWoEx) {
@@ -231,10 +238,13 @@ namespace DateFixer {
             return null;
         }
 
-        static void ProcessDirectory(string path) {
+        static DateTime? ProcessDirectory(string path) {
             string[] files = Directory.GetFiles(path);
+            DateTime? creationTime = DateTime.MinValue;
             foreach (var file in files) {
-                ProcessFile(file, files);
+                DateTime? res = ProcessFile(file, files);
+                if (res != null && res > creationTime)
+                    creationTime = res;
             }
 
             // Clear processed files when changing folder
@@ -242,9 +252,33 @@ namespace DateFixer {
 
             if (recursive) {
                 foreach (var folder in Directory.GetDirectories(path)) {
-                    ProcessDirectory(folder);
+                    DateTime? res = ProcessDirectory(folder);
+                    if (res != null && res > creationTime)
+                        creationTime = res;
                 }
             }
+
+            if (creationTime != null && creationTime != DateTime.MinValue) {
+                try {
+                    var attributes = File.GetAttributes(path);
+                    File.SetAttributes(path, FileAttributes.Normal);
+
+                    File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
+                    File.SetCreationTimeUtc(path, (DateTime)creationTime);
+
+                    File.SetAttributes(path, attributes);
+
+                    filesProcessedCount++;
+
+                    processedFiles.Add(path);
+
+                    if (!quiet)
+                        Console.WriteLine(Path.GetFileName(path) + " D> " + ((DateTime)creationTime).ToString());
+                } catch (Exception)when(!System.Diagnostics.Debugger.IsAttached) { }
+                return creationTime;
+            }
+
+            return null;
         }
 
         // Deep scan is done when the date on the ISO is invalid (< 1985)
