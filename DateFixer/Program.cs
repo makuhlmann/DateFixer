@@ -79,6 +79,7 @@ namespace DateFixer {
                             break;
                         case "d":
                             recursive = true;
+                            dateFolders = true;
                             break;
                         case "?":
                             Console.WriteLine("DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n\n" +
@@ -215,7 +216,11 @@ namespace DateFixer {
                 } catch (Exception) when (!System.Diagnostics.Debugger.IsAttached) { }
                 return creationTime;
             }
-            return null;
+
+            DateTime ct = File.GetCreationTime(path);
+            DateTime wt = File.GetLastWriteTime(path);
+
+            return ct > wt ? ct : wt;
         }
 
         static DateTime? ParseFileNameDate(string fileNameWoEx) {
@@ -258,19 +263,15 @@ namespace DateFixer {
                 }
             }
 
-            if (creationTime != null && creationTime != DateTime.MinValue) {
+            if (dateFolders && (creationTime != null && creationTime != DateTime.MinValue)) {
                 try {
                     var attributes = File.GetAttributes(path);
-                    File.SetAttributes(path, FileAttributes.Normal);
+                    File.SetAttributes(path, FileAttributes.Directory);
 
-                    File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
-                    File.SetCreationTimeUtc(path, (DateTime)creationTime);
+                    Directory.SetLastWriteTimeUtc(path, (DateTime)creationTime);
+                    Directory.SetCreationTimeUtc(path, (DateTime)creationTime);
 
                     File.SetAttributes(path, attributes);
-
-                    filesProcessedCount++;
-
-                    processedFiles.Add(path);
 
                     if (!quiet)
                         Console.WriteLine(Path.GetFileName(path) + " D> " + ((DateTime)creationTime).ToString());
