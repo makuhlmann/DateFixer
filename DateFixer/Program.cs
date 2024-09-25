@@ -183,7 +183,7 @@ namespace DateFixer {
                     File.SetAttributes(path, FileAttributes.Normal);
 
                     File.SetLastWriteTimeUtc(path, (DateTime)creationTime);
-                    File.SetCreationTimeUtc(path, (DateTime)creationTime);
+                    //File.SetCreationTimeUtc(path, (DateTime)creationTime);
 
                     File.SetAttributes(path, attributes);
 
@@ -201,7 +201,7 @@ namespace DateFixer {
                             File.SetAttributes(file, FileAttributes.Normal);
 
                             File.SetLastWriteTimeUtc(file, (DateTime)creationTime);
-                            File.SetCreationTimeUtc(file, (DateTime)creationTime);
+                            //File.SetCreationTimeUtc(file, (DateTime)creationTime);
 
                             File.SetAttributes(file, attributes);
 
@@ -217,10 +217,7 @@ namespace DateFixer {
                 return creationTime;
             }
 
-            DateTime ct = File.GetCreationTime(path);
-            DateTime wt = File.GetLastWriteTime(path);
-
-            return ct > wt ? ct : wt;
+            return File.GetLastWriteTime(path);
         }
 
         static DateTime? ParseFileNameDate(string fileNameWoEx) {
@@ -269,7 +266,7 @@ namespace DateFixer {
                     File.SetAttributes(path, FileAttributes.Directory);
 
                     Directory.SetLastWriteTimeUtc(path, (DateTime)creationTime);
-                    Directory.SetCreationTimeUtc(path, (DateTime)creationTime);
+                    //Directory.SetCreationTimeUtc(path, (DateTime)creationTime);
 
                     File.SetAttributes(path, attributes);
 
