@@ -223,18 +223,22 @@ namespace DateFixer {
         static DateTime? ParseFileNameDate(string fileNameWoEx) {
             Match m = Regex.Match(fileNameWoEx, @"(\d\d\d\d)\D?(\d\d)\D?(\d\d)\D?(\d\d)?\D?(\d\d)?\D?(\d\d)?");
             if (m.Success && (m.Groups[0].Value.StartsWith("19") || m.Groups[0].Value.StartsWith("20") || m.Groups[0].Value.StartsWith("21"))) {
-                if (!string.IsNullOrEmpty(m.Groups[6].Value)) {
-                    return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
-                                        int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), int.Parse(m.Groups[6].Value));
-                }
+                try {
+                    if (!string.IsNullOrEmpty(m.Groups[6].Value)) {
+                        return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
+                                            int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), int.Parse(m.Groups[6].Value));
+                    }
 
-                if (!string.IsNullOrEmpty(m.Groups[5].Value)) {
-                    return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
-                                        int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), 0);
-                }
+                    if (!string.IsNullOrEmpty(m.Groups[5].Value)) {
+                        return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value),
+                                            int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), 0);
+                    }
 
-                if (!string.IsNullOrEmpty(m.Groups[3].Value)) {
-                    return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value));
+                    if (!string.IsNullOrEmpty(m.Groups[3].Value)) {
+                        return new DateTime(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value));
+                    }
+                } catch (FormatException) {
+                    return null;
                 }
             }
             return null;
