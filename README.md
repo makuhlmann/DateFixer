@@ -68,3 +68,7 @@ Files will be searched for a date in the `yyyyMMdd HHmmss` order. Seconds, minut
 - 20010824
 
 Beware that dates that use the wrong order may be processed anyway, especially if the individual parts are not separated by characters. The only validation that is done is the year being checked to start with 19, 20 or 21.
+
+### License
+
+This project bundles some 7-Zip binaries by Igor Pavlov. See http://www.7-zip.org/license.txt for full license terms.

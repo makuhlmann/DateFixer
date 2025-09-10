@@ -1,11 +1,13 @@
-﻿using System;
+﻿using DiscUtils.Iso9660;
+using DiscUtils.Udf;
+using DiscUtils.Vfs;
+using Microsoft.SqlServer.Server;
+using SevenZipExtractor;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using DiscUtils.Iso9660;
-using DiscUtils.Udf;
-using DiscUtils.Vfs;
 
 namespace DateFixer {
     internal class Program {
@@ -42,6 +44,7 @@ namespace DateFixer {
 
         static bool scanIso = false;
         static bool scanSigned = false;
+        static bool scanContent = false;
         static bool processedAtLeastOne = false;
         static bool scanFileName = false;
         static bool quiet = false;
@@ -61,6 +64,9 @@ namespace DateFixer {
                             break;
                         case "s":
                             scanSigned = true;
+                            break;
+                        case "c":
+                            scanContent = true;
                             break;
                         case "f":
                             scanFileName = true;
@@ -85,6 +91,7 @@ namespace DateFixer {
                             Console.WriteLine("DateFixer Usage: datefixer [/i] [/s] path1 [path2] [path3] ...\n\n" +
                             "/i - Process image files\n" +
                             "/s - Process signed files\n" +
+                            "/c - Process archive content\n" +
                             "/f - Try to parse dates contained in the file name\n" +
                             "/x - Ignore file extensions, try to process all files anyway\n" +
                             "/l - Give files with the same name but a different extension the same date\n" +
@@ -92,7 +99,7 @@ namespace DateFixer {
                             "/d - Give folders the same date as the newest file contained within (implies /r)\n" +
                             "/q - Do not print all files that were touched\n" +
                             "/? - Shows list of commands\n\n" +
-                            "Default options: /i /s\n" +
+                            "Default options: /i /s /c\n" +
                             "The file name parser is looking for various formats in the order yyyyMMdd[HHmm[ss]]");
                             return;
                         default:
@@ -100,9 +107,9 @@ namespace DateFixer {
                             return;
                     }
                 } else {
-                    // Set defaults /i /s
-                    if (!scanIso && !scanSigned && !scanFileName)
-                        scanIso = scanSigned = true;
+                    // Set defaults /i /s /c
+                    if (!scanIso && !scanSigned && !scanFileName && !scanContent)
+                        scanIso = scanSigned = scanContent = true;
 
                     // If at least one path was processed here, no warning will be shown
                     processedAtLeastOne = true;
@@ -173,6 +180,10 @@ namespace DateFixer {
 
             if (creationTime == null && scanSigned && (signedFilesFormat.Contains(extension) || ignoreFormats))
                 creationTime = SignatureManager.GetSignatureDate(path);
+
+            if (creationTime == null && scanContent) {
+                creationTime = ProcessArchive(path);
+            }
 
             if (creationTime == null && scanFileName)
                 creationTime = ParseFileNameDate(Path.GetFileNameWithoutExtension(path));
@@ -281,6 +292,34 @@ namespace DateFixer {
             }
 
             return null;
+        }
+
+        static DateTime? ProcessArchive(string path, int? format = null) {
+            DateTime? creationTime = null;
+            try {
+                using (FileStream fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                    ArchiveFile archive;
+                    archive = new ArchiveFile(fileStream, format: (SevenZipFormat?)format);
+
+                    foreach (var entry in archive.Entries) {
+                        if (!entry.IsFolder && entry.LastWriteTime.Year > 1980 && (creationTime == null || creationTime < entry.LastWriteTime)) {
+                            creationTime = entry.LastWriteTime;
+                        }
+                    }
+                }
+            } catch (SevenZipException e) {
+                if (format == null) {
+                    // It's bruteforce time!
+                    for (int i = 1; i <= 47; i++) {
+                        if (i == 33)
+                            continue; // Unsupported format
+                        creationTime = ProcessArchive(path, i);
+                        if (creationTime != null)
+                            break;
+                    }
+                }
+            }
+            return creationTime;
         }
 
         // Deep scan is done when the date on the ISO is invalid (< 1985)
