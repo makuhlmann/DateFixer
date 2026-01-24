@@ -1,10 +1,10 @@
 ﻿using DiscUtils.Iso9660;
 using DiscUtils.Udf;
 using DiscUtils.Vfs;
-using Microsoft.SqlServer.Server;
 using SevenZipExtractor;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -260,6 +260,8 @@ namespace DateFixer {
             DateTime? creationTime = DateTime.MinValue;
             foreach (var file in files) {
                 DateTime? res = ProcessFile(file, files);
+                // If file was not processed, take the currently assigned date
+                res = File.GetLastWriteTimeUtc(file);
                 if (res != null && res > creationTime)
                     creationTime = res;
             }
@@ -270,6 +272,8 @@ namespace DateFixer {
             if (recursive) {
                 foreach (var folder in Directory.GetDirectories(path)) {
                     DateTime? res = ProcessDirectory(folder);
+                    // If folder was not processed, take the currently assigned date
+                    res = File.GetLastWriteTimeUtc(folder);
                     if (res != null && res > creationTime)
                         creationTime = res;
                 }
@@ -307,12 +311,12 @@ namespace DateFixer {
                         }
                     }
                 }
-            } catch (SevenZipException e) {
+            } catch (SevenZipException) {
                 if (format == null) {
                     // It's bruteforce time!
                     for (int i = 1; i <= 47; i++) {
                         if (i == 33)
-                            continue; // Unsupported format
+                            return ProcessArchiveDirect(path); // Unsupported format
                         creationTime = ProcessArchive(path, i);
                         if (creationTime != null)
                             break;
@@ -320,6 +324,51 @@ namespace DateFixer {
                 }
             }
             return creationTime;
+        }
+
+        static DateTime? ScanFileDatesRecursive(string path) {
+            DateTime? creationTime = DateTime.MinValue;
+            foreach (var file in Directory.GetFiles(path)) {
+                DateTime? res = File.GetLastWriteTimeUtc(file);
+                if (res != null && res > creationTime)
+                    creationTime = res;
+            }
+            foreach (var folder in Directory.GetDirectories(path)) {
+                DateTime? res = ScanFileDatesRecursive(folder);
+                if (res != null && res > creationTime)
+                    creationTime = res;
+            }
+            return creationTime;
+        }
+
+        static DateTime? ProcessArchiveDirect(string path) {
+            string sevenZipPath = Util.Get7zPath();
+            if (sevenZipPath == null) {
+                return null;
+            }
+
+            string tempPath = Path.Combine(Path.GetTempPath(), "DateFixerTemp");
+
+            if (Directory.Exists(tempPath)) {
+                Util.ForceDeleteDirectory(tempPath);
+            }
+
+            Directory.CreateDirectory(tempPath);
+
+            string commandArgs = $"x \"{path}\" -o" + tempPath;
+            Process.Start(sevenZipPath, commandArgs).WaitForExit();
+
+            DateTime currentTime = DateTime.Now;
+
+            DateTime? processDirectoryTime = ScanFileDatesRecursive(tempPath);
+
+            Util.ForceDeleteDirectory(tempPath);
+
+            if (processDirectoryTime != null && processDirectoryTime > currentTime) {
+                return null;
+            }
+
+            return processDirectoryTime;
         }
 
         // Deep scan is done when the date on the ISO is invalid (< 1985)
