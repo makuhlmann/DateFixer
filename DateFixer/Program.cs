@@ -305,6 +305,10 @@ namespace DateFixer {
                     ArchiveFile archive;
                     archive = new ArchiveFile(fileStream, format: (SevenZipFormat?)format);
 
+                    if (archive.Entries.Any(s => s.FileName == ".text")) {
+                        throw new SevenZipException("Wrong format");
+                    }
+
                     foreach (var entry in archive.Entries) {
                         if (!entry.IsFolder && entry.LastWriteTime.Year > 1980 && (creationTime == null || creationTime < entry.LastWriteTime)) {
                             creationTime = entry.LastWriteTime;
